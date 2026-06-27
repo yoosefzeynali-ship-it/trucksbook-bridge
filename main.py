@@ -42,62 +42,107 @@ async def send_message(text):
         "parse_mode": "HTML"
     })
 
-# ===== استخراج منشن‌ها از پیام =====
-def extract_mentions(message):
+# ===== استخراج اسم راننده با روش‌های مختلف =====
+def extract_driver_name(message):
     """
-    استخراج اسم کاربرانی که منشن شدن در پیام
+    استخراج اسم راننده از پیام با روش‌های مختلف
     """
-    mentions = []
+    driver_names = []
     
-    # از خود message.mentions استفاده کن (بهترین روش)
+    # ===== روش ۱: از message.mentions =====
     for user in message.mentions:
-        mentions.append(user.display_name)
+        driver_names.append(user.display_name)
+        print(f"✅ روش ۱ - منشن: {user.display_name}")
     
-    # اگه کسی منشن نشده بود، از message.content با Regex استفاده کن
-    if not mentions:
+    # ===== روش ۲: از محتوای متن با Regex =====
+    if not driver_names and message.content:
         # الگوی منشن: <@!USER_ID> یا <@USER_ID>
-        pattern = r'<@!?(\d+)>'
-        matches = re.findall(pattern, message.content)
+        user_mention_pattern = r'<@!?(\d+)>'
+        matches = re.findall(user_mention_pattern, message.content)
         
         for user_id in matches:
-            try:
-                user = client.get_user(int(user_id))
-                if user:
-                    mentions.append(user.display_name)
-            except:
-                pass
+            user = client.get_user(int(user_id))
+            if user:
+                driver_names.append(user.display_name)
+                print(f"✅ روش ۲ - Regex منشن: {user.display_name}")
     
-    return mentions
+    # ===== روش ۳: از Embed =====
+    if not driver_names:
+        for embed in message.embeds:
+            # بررسی عنوان
+            if embed.title:
+                # الگوی [نام](لینک)
+                link_pattern = r'\[([^\]]+)\]\([^\)]+\)'
+                link_matches = re.findall(link_pattern, embed.title)
+                if link_matches:
+                    driver_names.extend(link_matches)
+                    print(f"✅ روش ۳ - لینک در عنوان: {link_matches}")
+            
+            # بررسی توضیحات
+            if embed.description:
+                link_matches = re.findall(r'\[([^\]]+)\]\([^\)]+\)', embed.description)
+                if link_matches:
+                    driver_names.extend(link_matches)
+                    print(f"✅ روش ۳ - لینک در توضیحات: {link_matches}")
+            
+            # بررسی فیلدها
+            for field in embed.fields:
+                link_matches = re.findall(r'\[([^\]]+)\]\([^\)]+\)', field.value)
+                if link_matches:
+                    driver_names.extend(link_matches)
+                    print(f"✅ روش ۳ - لینک در فیلد: {link_matches}")
+    
+    # ===== روش ۴: از Webhook نام =====
+    if not driver_names and message.webhook_id:
+        webhook_name = message.author.name
+        if webhook_name and "Webhook" not in webhook_name:
+            driver_names.append(webhook_name)
+            print(f"✅ روش ۴ - اسم Webhook: {webhook_name}")
+    
+    # ===== روش ۵: از محتوای متن (آخرین کلمه قبل از Embed) =====
+    if not driver_names and message.content:
+        # اگه متن قبل از Embed باشه
+        parts = message.content.split()
+        if parts:
+            # ممکنه آخرین کلمه اسم باشه
+            last_word = parts[-1]
+            if last_word and not last_word.startswith('<'):
+                driver_names.append(last_word)
+                print(f"✅ روش ۵ - آخرین کلمه: {last_word}")
+    
+    return driver_names
 
 # ===== تبدیل Embed به متن =====
-def embed_to_text(embed, author_name=None, mention_names=None):
+def embed_to_text(embed, driver_names=None):
     parts = []
     
-    # ===== اضافه کردن اسم راننده (از منشن‌ها) =====
-    if mention_names:
-        for name in mention_names:
+    # ===== اضافه کردن اسم راننده =====
+    if driver_names:
+        for name in driver_names:
             parts.append(f"<b>👤 {name}</b>")
             parts.append("")
-    elif author_name and "Webhook" not in author_name:
-        parts.append(f"<b>👤 {author_name}</b>")
-        parts.append("")
     
     # ===== محتوای اصلی =====
     if embed.title:
-        parts.append(f"<b>{embed.title}</b>")
+        # پاک کردن لینک‌ها از عنوان
+        clean_title = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.title)
+        parts.append(f"<b>{clean_title}</b>")
     
     if embed.description:
-        parts.append(embed.description)
+        clean_desc = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.description)
+        parts.append(clean_desc)
     
     # فیلدها
     if embed.fields:
         for field in embed.fields:
             if field.name and field.value:
-                parts.append(f"<b>{field.name}:</b> {field.value}")
+                clean_value = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', field.value)
+                parts.append(f"<b>{field.name}:</b> {clean_value}")
     
     # Footer
     if embed.footer and embed.footer.text:
-        parts.append(f"\n{embed.footer.text}")
+        clean_footer = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.footer.text)
+        parts.append(f"\n{clean_footer}")
     
     return "\n".join(parts) if parts else None
 
@@ -108,44 +153,51 @@ async def on_message(message):
         return
     
     try:
-        # ===== استخراج منشن‌ها =====
-        mention_names = extract_mentions(message)
+        # ===== دیباگ کامل =====
+        print("\n" + "=" * 60)
+        print(f"📨 نویسنده: {message.author} (ID: {message.author.id})")
+        print(f"📝 محتوای خام: {repr(message.content)}")
+        print(f"🔗 Webhook ID: {message.webhook_id}")
+        print(f"📊 تعداد Embeds: {len(message.embeds)}")
         
-        # ===== گرفتن اسم نویسنده =====
-        if message.webhook_id:
-            author_name = message.author.name
-        else:
-            author_name = message.author.display_name
+        # نمایش همه Embedها
+        for i, embed in enumerate(message.embeds):
+            print(f"\n--- Embed {i+1} ---")
+            print(f"عنوان: {repr(embed.title)}")
+            print(f"توضیحات: {repr(embed.description)}")
+            if embed.fields:
+                for field in embed.fields:
+                    print(f"فیلد: {repr(field.name)} = {repr(field.value)}")
+            print(f"فوتر: {repr(embed.footer.text) if embed.footer else None}")
         
-        # ===== لاگ برای دیباگ =====
-        print(f"📨 Author: {author_name}")
-        print(f"👥 Mentions: {mention_names}")
-        print(f"🔍 Webhook ID: {message.webhook_id}")
+        print(f"👥 منشن‌ها: {[user.display_name for user in message.mentions]}")
+        print("=" * 60 + "\n")
+        
+        # ===== استخراج اسم راننده =====
+        driver_names = extract_driver_name(message)
+        
+        # ===== اگر اسم پیدا نشد، از مقدار پیش‌فرض استفاده کن =====
+        if not driver_names:
+            driver_names = ["راننده"]
+            print("⚠️ اسمی پیدا نشد، از پیش‌فرض استفاده شد")
         
         # ===== Embedها =====
         for embed in message.embeds:
-            text = embed_to_text(embed, author_name, mention_names)
+            text = embed_to_text(embed, driver_names)
             if text:
                 await send_message(text)
         
         # ===== متن اصلی =====
         if message.content and not message.embeds:
-            # پاک کردن منشن‌ها از متن (چون جدا نشونشون میدیم)
+            # پاک کردن منشن‌ها از متن
             clean_content = re.sub(r'<@!?(\d+)>', '', message.content).strip()
-            
-            if mention_names:
-                name_text = "، ".join(mention_names)
-                await send_message(f"<b>👤 {name_text}</b>\n{clean_content}")
-            else:
-                await send_message(f"<b>👤 {author_name}</b>\n{clean_content}")
+            name_text = "، ".join(driver_names)
+            await send_message(f"<b>👤 {name_text}</b>\n{clean_content}")
         
         # ===== فایل‌ها =====
         for attachment in message.attachments:
-            if mention_names:
-                name_text = "، ".join(mention_names)
-                caption = f"<b>👤 {name_text}</b>\n📎 {attachment.filename}"
-            else:
-                caption = f"<b>👤 {author_name}</b>\n📎 {attachment.filename}"
+            name_text = "، ".join(driver_names)
+            caption = f"<b>👤 {name_text}</b>\n📎 {attachment.filename}"
             await send_message(caption)
     
     except Exception as e:
