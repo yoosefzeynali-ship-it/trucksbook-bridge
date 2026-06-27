@@ -5,6 +5,7 @@ import aiohttp
 import discord
 from discord import Intents
 from flask import Flask
+import re
 
 # ===== Environment Variables =====
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -41,25 +42,43 @@ async def send_message(text):
         "parse_mode": "HTML"
     })
 
-# ===== استخراج اسم از Webhook =====
-def get_author_name(message):
+# ===== استخراج منشن‌ها از پیام =====
+def extract_mentions(message):
     """
-    اسم نویسنده رو از Webhook یا کاربر عادی استخراج میکنه
+    استخراج اسم کاربرانی که منشن شدن در پیام
     """
-    # اگه Webhook باشه
-    if message.webhook_id:
-        # اسم Webhook رو برمیگردونه (همون اسم راننده)
-        return message.author.display_name
+    mentions = []
     
-    # اگه کاربر عادی باشه
-    return message.author.display_name
+    # از خود message.mentions استفاده کن (بهترین روش)
+    for user in message.mentions:
+        mentions.append(user.display_name)
+    
+    # اگه کسی منشن نشده بود، از message.content با Regex استفاده کن
+    if not mentions:
+        # الگوی منشن: <@!USER_ID> یا <@USER_ID>
+        pattern = r'<@!?(\d+)>'
+        matches = re.findall(pattern, message.content)
+        
+        for user_id in matches:
+            try:
+                user = client.get_user(int(user_id))
+                if user:
+                    mentions.append(user.display_name)
+            except:
+                pass
+    
+    return mentions
 
 # ===== تبدیل Embed به متن =====
-def embed_to_text(embed, author_name=None):
+def embed_to_text(embed, author_name=None, mention_names=None):
     parts = []
     
-    # ===== اضافه کردن اسم راننده =====
-    if author_name:
+    # ===== اضافه کردن اسم راننده (از منشن‌ها) =====
+    if mention_names:
+        for name in mention_names:
+            parts.append(f"<b>👤 {name}</b>")
+            parts.append("")
+    elif author_name and "Webhook" not in author_name:
         parts.append(f"<b>👤 {author_name}</b>")
         parts.append("")
     
@@ -89,22 +108,44 @@ async def on_message(message):
         return
     
     try:
-        # ===== گرفتن اسم راننده =====
-        author_name = get_author_name(message)
+        # ===== استخراج منشن‌ها =====
+        mention_names = extract_mentions(message)
+        
+        # ===== گرفتن اسم نویسنده =====
+        if message.webhook_id:
+            author_name = message.author.name
+        else:
+            author_name = message.author.display_name
+        
+        # ===== لاگ برای دیباگ =====
+        print(f"📨 Author: {author_name}")
+        print(f"👥 Mentions: {mention_names}")
+        print(f"🔍 Webhook ID: {message.webhook_id}")
         
         # ===== Embedها =====
         for embed in message.embeds:
-            text = embed_to_text(embed, author_name)
+            text = embed_to_text(embed, author_name, mention_names)
             if text:
                 await send_message(text)
         
         # ===== متن اصلی =====
         if message.content and not message.embeds:
-            await send_message(f"<b>👤 {author_name}</b>\n{message.content}")
+            # پاک کردن منشن‌ها از متن (چون جدا نشونشون میدیم)
+            clean_content = re.sub(r'<@!?(\d+)>', '', message.content).strip()
+            
+            if mention_names:
+                name_text = "، ".join(mention_names)
+                await send_message(f"<b>👤 {name_text}</b>\n{clean_content}")
+            else:
+                await send_message(f"<b>👤 {author_name}</b>\n{clean_content}")
         
         # ===== فایل‌ها =====
         for attachment in message.attachments:
-            caption = f"<b>👤 {author_name}</b>\n📎 {attachment.filename}"
+            if mention_names:
+                name_text = "، ".join(mention_names)
+                caption = f"<b>👤 {name_text}</b>\n📎 {attachment.filename}"
+            else:
+                caption = f"<b>👤 {author_name}</b>\n📎 {attachment.filename}"
             await send_message(caption)
     
     except Exception as e:
