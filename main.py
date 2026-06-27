@@ -41,45 +41,25 @@ async def send_message(text):
         "parse_mode": "HTML"
     })
 
-# ===== استخراج اسم واقعی از Embed =====
-def extract_real_name_from_embed(embed):
+# ===== استخراج اسم از Webhook =====
+def get_author_name(message):
     """
-    اسم واقعی رو از داخل Embed استخراج میکنه
+    اسم نویسنده رو از Webhook یا کاربر عادی استخراج میکنه
     """
-    # روش اول: از عنوان یا توضیحات
-    if embed.title and "TrucksBook" in embed.title:
-        # اگه عنوان فقط "Trucksbook" هست، از اون استفاده نکن
-        pass
+    # اگه Webhook باشه
+    if message.webhook_id:
+        # اسم Webhook رو برمیگردونه (همون اسم راننده)
+        return message.author.display_name
     
-    # روش دوم: از فیلدها
-    if embed.fields:
-        for field in embed.fields:
-            # اگه فیلدی اسم کاربر رو داشته باشه
-            if field.name and ("کاربر" in field.name or "player" in field.name.lower() or "driver" in field.name.lower()):
-                return field.value
-    
-    # روش سوم: از متن footer
-    if embed.footer and embed.footer.text:
-        # اگه footer شامل اسم باشه
-        footer_text = embed.footer.text
-        if "TrucksBook" not in footer_text and len(footer_text) < 30:
-            return footer_text
-    
-    return None
+    # اگه کاربر عادی باشه
+    return message.author.display_name
 
 # ===== تبدیل Embed به متن =====
 def embed_to_text(embed, author_name=None):
     parts = []
     
-    # ===== استخراج اسم واقعی =====
-    real_name = extract_real_name_from_embed(embed)
-    
-    # اگه اسم واقعی پیدا شد، از اون استفاده کن
-    if real_name:
-        parts.append(f"<b>👤 {real_name}</b>")
-        parts.append("")
-    # در غیر این صورت از اسم فرستنده استفاده کن (اگه Webhook نباشه)
-    elif author_name and "Webhook" not in author_name:
+    # ===== اضافه کردن اسم راننده =====
+    if author_name:
         parts.append(f"<b>👤 {author_name}</b>")
         parts.append("")
     
@@ -94,21 +74,11 @@ def embed_to_text(embed, author_name=None):
     if embed.fields:
         for field in embed.fields:
             if field.name and field.value:
-                # اگه فیلد اسم کاربره، از قبل اضافه کردیم پس دوباره اضافه نکن
-                if field.name and ("کاربر" in field.name or "player" in field.name.lower() or "driver" in field.name.lower()):
-                    continue
                 parts.append(f"<b>{field.name}:</b> {field.value}")
     
     # Footer
     if embed.footer and embed.footer.text:
-        footer_text = embed.footer.text
-        # اگه footer اسم کاربره، از قبل اضافه کردیم
-        if real_name and real_name in footer_text:
-            pass
-        elif "TrucksBook" not in footer_text:
-            parts.append(f"\n{footer_text}")
-        else:
-            parts.append(f"\n{footer_text}")
+        parts.append(f"\n{embed.footer.text}")
     
     return "\n".join(parts) if parts else None
 
@@ -119,26 +89,22 @@ async def on_message(message):
         return
     
     try:
+        # ===== گرفتن اسم راننده =====
+        author_name = get_author_name(message)
+        
         # ===== Embedها =====
         for embed in message.embeds:
-            text = embed_to_text(embed, message.author.display_name)
+            text = embed_to_text(embed, author_name)
             if text:
                 await send_message(text)
         
         # ===== متن اصلی =====
         if message.content and not message.embeds:
-            # اگه Webhook نباشه
-            if "Webhook" not in message.author.display_name:
-                await send_message(f"<b>👤 {message.author.display_name}</b>\n{message.content}")
-            else:
-                await send_message(message.content)
+            await send_message(f"<b>👤 {author_name}</b>\n{message.content}")
         
         # ===== فایل‌ها =====
         for attachment in message.attachments:
-            if "Webhook" not in message.author.display_name:
-                caption = f"<b>👤 {message.author.display_name}</b>\n📎 {attachment.filename}"
-            else:
-                caption = f"📎 {attachment.filename}"
+            caption = f"<b>👤 {author_name}</b>\n📎 {attachment.filename}"
             await send_message(caption)
     
     except Exception as e:
