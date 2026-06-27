@@ -5,7 +5,7 @@ import aiohttp
 import discord
 from discord import Intents
 from flask import Flask
-import json
+import re
 
 # ===== Environment Variables =====
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -28,6 +28,54 @@ intents = Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
+# ===== دیکشنری کامل پرچم‌ها =====
+FLAG_MAP = {
+    ':flag_us:': '🇺🇸', ':flag_ca:': '🇨🇦', ':flag_mx:': '🇲🇽',
+    ':flag_uk:': '🇬🇧', ':flag_gb:': '🇬🇧', ':flag_de:': '🇩🇪',
+    ':flag_fr:': '🇫🇷', ':flag_it:': '🇮🇹', ':flag_es:': '🇪🇸',
+    ':flag_pt:': '🇵🇹', ':flag_nl:': '🇳🇱', ':flag_be:': '🇧🇪',
+    ':flag_at:': '🇦🇹', ':flag_ch:': '🇨🇭', ':flag_se:': '🇸🇪',
+    ':flag_no:': '🇳🇴', ':flag_dk:': '🇩🇰', ':flag_fi:': '🇫🇮',
+    ':flag_pl:': '🇵🇱', ':flag_cz:': '🇨🇿', ':flag_sk:': '🇸🇰',
+    ':flag_hu:': '🇭🇺', ':flag_ro:': '🇷🇴', ':flag_bg:': '🇧🇬',
+    ':flag_gr:': '🇬🇷', ':flag_tr:': '🇹🇷', ':flag_ie:': '🇮🇪',
+    ':flag_is:': '🇮🇸', ':flag_lt:': '🇱🇹', ':flag_lv:': '🇱🇻',
+    ':flag_ee:': '🇪🇪', ':flag_ru:': '🇷🇺', ':flag_ua:': '🇺🇦',
+    ':flag_ir:': '🇮🇷', ':flag_ae:': '🇦🇪', ':flag_sa:': '🇸🇦',
+    ':flag_in:': '🇮🇳', ':flag_cn:': '🇨🇳', ':flag_jp:': '🇯🇵',
+    ':flag_kr:': '🇰🇷', ':flag_vn:': '🇻🇳', ':flag_th:': '🇹🇭',
+    ':flag_my:': '🇲🇾', ':flag_sg:': '🇸🇬', ':flag_ph:': '🇵🇭',
+    ':flag_id:': '🇮🇩', ':flag_pk:': '🇵🇰', ':flag_bd:': '🇧🇩',
+    ':flag_np:': '🇳🇵', ':flag_lk:': '🇱🇰', ':flag_kh:': '🇰🇭',
+    ':flag_af:': '🇦🇫', ':flag_iq:': '🇮🇶', ':flag_sy:': '🇸🇾',
+    ':flag_jo:': '🇯🇴', ':flag_lb:': '🇱🇧', ':flag_il:': '🇮🇱',
+    ':flag_ye:': '🇾🇪', ':flag_om:': '🇴🇲', ':flag_qa:': '🇶🇦',
+    ':flag_kw:': '🇰🇼', ':flag_eg:': '🇪🇬', ':flag_za:': '🇿🇦',
+    ':flag_ng:': '🇳🇬', ':flag_ke:': '🇰🇪', ':flag_tz:': '🇹🇿',
+    ':flag_gh:': '🇬🇭', ':flag_dz:': '🇩🇿', ':flag_ma:': '🇲🇦',
+    ':flag_tn:': '🇹🇳', ':flag_ly:': '🇱🇾', ':flag_et:': '🇪🇹',
+    ':flag_so:': '🇸🇴', ':flag_ug:': '🇺🇬', ':flag_rw:': '🇷🇼',
+    ':flag_cd:': '🇨🇩', ':flag_cg:': '🇨🇬', ':flag_ga:': '🇬🇦',
+    ':flag_cm:': '🇨🇲', ':flag_ci:': '🇨🇮', ':flag_sn:': '🇸🇳',
+    ':flag_ml:': '🇲🇱', ':flag_bf:': '🇧🇫', ':flag_ne:': '🇳🇪',
+    ':flag_td:': '🇹🇩', ':flag_au:': '🇦🇺', ':flag_nz:': '🇳🇿',
+    ':flag_fj:': '🇫🇯', ':flag_pg:': '🇵🇬', ':flag_br:': '🇧🇷',
+    ':flag_ar:': '🇦🇷', ':flag_cl:': '🇨🇱', ':flag_co:': '🇨🇴',
+    ':flag_pe:': '🇵🇪', ':flag_ve:': '🇻🇪', ':flag_ec:': '🇪🇨',
+    ':flag_bo:': '🇧🇴', ':flag_py:': '🇵🇾', ':flag_uy:': '🇺🇾',
+}
+
+def convert_emoji(text):
+    """تبدیل کدهای ایموجی دیسکورد به یونیکد"""
+    if not text:
+        return text
+    
+    # تبدیل پرچم‌ها
+    for code, emoji in FLAG_MAP.items():
+        text = text.replace(code, emoji)
+    
+    return text
+
 # ===== توابع تلگرام =====
 async def telegram(method, data):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
@@ -42,80 +90,29 @@ async def send_message(text):
         "parse_mode": "HTML"
     })
 
-# ===== دیباگ کامل پیام =====
-def debug_message(message):
-    print("\n" + "=" * 80)
-    print("🔍 DEBUG - تمام اطلاعات پیام:")
-    print("=" * 80)
+# ===== تبدیل Embed به متن =====
+def embed_to_text(embed, author_name=None):
+    parts = []
     
-    # اطلاعات پایه
-    print(f"📌 ID: {message.id}")
-    print(f"📌 نوع: {message.type}")
-    print(f"📌 نویسنده: {message.author} (ID: {message.author.id})")
-    print(f"📌 نام نویسنده: {message.author.name}")
-    print(f"📌 نام نمایشی: {message.author.display_name}")
-    print(f"📌 Webhook ID: {message.webhook_id}")
-    print(f"📌 محتوای متن: {repr(message.content)}")
-    print(f"📌 تعداد Embeds: {len(message.embeds)}")
-    print(f"📌 تعداد فایل‌ها: {len(message.attachments)}")
-    print(f"📌 تعداد منشن‌ها: {len(message.mentions)}")
+    if author_name:
+        parts.append(f"<b>👤 {author_name}</b>")
+        parts.append("")
     
-    if message.mentions:
-        for user in message.mentions:
-            print(f"   👤 منشن: {user} (ID: {user.id}) - نام: {user.name} - نمایشی: {user.display_name}")
+    if embed.title:
+        parts.append(f"<b>{convert_emoji(embed.title)}</b>")
     
-    # ===== بررسی کامل هر Embed =====
-    for i, embed in enumerate(message.embeds):
-        print(f"\n--- EMBED {i+1} ---")
-        
-        # تبدیل به دیکشنری برای نمایش
-        embed_dict = embed.to_dict()
-        print(json.dumps(embed_dict, indent=2, ensure_ascii=False))
-        
-        # بررسی جداگانه هر بخش
-        print("\n📊 بررسی جداگانه:")
-        
-        if embed.author:
-            print(f"  👤 AUTHOR:")
-            print(f"     name: {repr(embed.author.name)}")
-            print(f"     url: {repr(embed.author.url)}")
-            print(f"     icon_url: {repr(embed.author.icon_url)}")
-        else:
-            print("  👤 AUTHOR: ندارد")
-        
-        if embed.title:
-            print(f"  📌 TITLE: {repr(embed.title)}")
-        else:
-            print("  📌 TITLE: ندارد")
-        
-        if embed.description:
-            print(f"  📝 DESCRIPTION: {repr(embed.description)}")
-        else:
-            print("  📝 DESCRIPTION: ندارد")
-        
-        if embed.fields:
-            for j, field in enumerate(embed.fields):
-                print(f"  📋 FIELD {j+1}:")
-                print(f"     name: {repr(field.name)}")
-                print(f"     value: {repr(field.value)}")
-                print(f"     inline: {field.inline}")
-        
-        if embed.footer:
-            print(f"  📌 FOOTER: {repr(embed.footer.text)}")
-        else:
-            print("  📌 FOOTER: ندارد")
-        
-        if embed.image:
-            print(f"  🖼️ IMAGE: {repr(embed.image.url)}")
-        else:
-            print("  🖼️ IMAGE: ندارد")
-        
-        if embed.thumbnail:
-            print(f"  🖼️ THUMBNAIL: {repr(embed.thumbnail.url)}")
-        else:
-            print("  🖼️ THUMBNAIL: ندارد")
+    if embed.description:
+        parts.append(convert_emoji(embed.description))
     
-    print("=" * 80 + "\n")
+    if embed.fields:
+        for field in embed.fields:
+            if field.name and field.value:
+                parts.append(f"<b>{convert_emoji(field.name)}:</b> {convert_emoji(field.value)}")
+    
+    if embed.footer and embed.footer.text:
+        parts.append(f"\n{convert_emoji(embed.footer.text)}")
+    
+    return "\n".join(parts) if parts else None
 
 # ===== رویداد پیام =====
 @client.event
@@ -124,40 +121,37 @@ async def on_message(message):
         return
     
     try:
-        # ===== دیباگ =====
-        debug_message(message)
-        
-        # ===== بعد از دیباگ، می‌تونیم پیام رو بفرستیم =====
-        # اینجا کد ارسال به تلگرام رو می‌ذاریم
-        
+        # استخراج اسم راننده
+        driver_name = None
         for embed in message.embeds:
-            # ساده‌ترین حالت: فقط محتوای Embed رو بفرست
-            text = f"📨 پیام از دیسکورد\n"
-            
             if embed.author and embed.author.name:
-                text += f"👤 {embed.author.name}\n"
-            
-            if embed.title:
-                text += f"📌 {embed.title}\n"
-            
-            if embed.description:
-                text += f"{embed.description}\n"
-            
-            if embed.fields:
-                for field in embed.fields:
-                    text += f"{field.name}: {field.value}\n"
-            
-            if embed.footer and embed.footer.text:
-                text += f"\n{embed.footer.text}"
-            
-            await send_message(text)
+                driver_name = embed.author.name
+                break
         
-        # اگه Embed نبود، متن رو بفرست
+        if not driver_name and message.webhook_id:
+            webhook_name = message.author.name
+            if webhook_name and "Webhook" not in webhook_name:
+                driver_name = webhook_name
+        
+        if not driver_name and message.mentions:
+            driver_name = message.mentions[0].display_name
+        
+        # ارسال Embedها
+        for embed in message.embeds:
+            text = embed_to_text(embed, driver_name)
+            if text:
+                await send_message(text)
+        
+        # ارسال متن اصلی
         if message.content and not message.embeds:
-            await send_message(f"📨 {message.author.name}:\n{message.content}")
+            clean_content = convert_emoji(message.content)
+            if driver_name:
+                await send_message(f"<b>👤 {driver_name}</b>\n{clean_content}")
+            else:
+                await send_message(clean_content)
     
     except Exception as e:
-        print(f"❌ ERROR: {e}")
+        print("ERROR:", e)
 
 @client.event
 async def on_ready():
