@@ -1,20 +1,33 @@
 import os
 import asyncio
+import threading
 import aiohttp
 import discord
 from discord import Intents
+from flask import Flask
 
 # ===== Environment Variables =====
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
+# ===== Flask App (برای راضی کردن Render) =====
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Discord Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
 # ===== کلاینت دیسکورد =====
 intents = Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-# ===== تابع ارسال به تلگرام =====
+# ===== توابع تلگرام =====
 async def telegram(method, data):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
     async with aiohttp.ClientSession() as session:
@@ -90,11 +103,23 @@ async def on_message(message):
     except Exception as e:
         print("ERROR:", e)
 
+@client.event
+async def on_ready():
+    print(f"✅ Logged in as {client.user}")
+
 # ===== اجرا =====
+def run_bot():
+    client.run(DISCORD_TOKEN)
+
 if __name__ == "__main__":
     if not DISCORD_TOKEN or not TELEGRAM_TOKEN or not CHAT_ID:
         print("❌ Environment Variables missing!")
         exit(1)
     
-    print("✅ Bot is running...")
-    client.run(DISCORD_TOKEN)
+    # ربات دیسکورد رو توی یه ترد جدا اجرا کن
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # فلاسک رو اجرا کن تا Render خوشحال بشه
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
