@@ -1,125 +1,179 @@
+import os
+import asyncio
+import threading
+import aiohttp
+import discord
+from discord import Intents
+from flask import Flask
+import json
+
+# ===== Environment Variables =====
+DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
+
+# ===== Flask App =====
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Discord Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+# ===== کلاینت دیسکورد =====
+intents = Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
+
+# ===== توابع تلگرام =====
+async def telegram(method, data):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=data) as response:
+            return await response.json()
+
+async def send_message(text):
+    await telegram("sendMessage", {
+        "chat_id": CHAT_ID,
+        "text": text,
+        "parse_mode": "HTML"
+    })
+
+# ===== دیباگ کامل پیام =====
+def debug_message(message):
+    print("\n" + "=" * 80)
+    print("🔍 DEBUG - تمام اطلاعات پیام:")
+    print("=" * 80)
+    
+    # اطلاعات پایه
+    print(f"📌 ID: {message.id}")
+    print(f"📌 نوع: {message.type}")
+    print(f"📌 نویسنده: {message.author} (ID: {message.author.id})")
+    print(f"📌 نام نویسنده: {message.author.name}")
+    print(f"📌 نام نمایشی: {message.author.display_name}")
+    print(f"📌 Webhook ID: {message.webhook_id}")
+    print(f"📌 محتوای متن: {repr(message.content)}")
+    print(f"📌 تعداد Embeds: {len(message.embeds)}")
+    print(f"📌 تعداد فایل‌ها: {len(message.attachments)}")
+    print(f"📌 تعداد منشن‌ها: {len(message.mentions)}")
+    
+    if message.mentions:
+        for user in message.mentions:
+            print(f"   👤 منشن: {user} (ID: {user.id}) - نام: {user.name} - نمایشی: {user.display_name}")
+    
+    # ===== بررسی کامل هر Embed =====
+    for i, embed in enumerate(message.embeds):
+        print(f"\n--- EMBED {i+1} ---")
+        
+        # تبدیل به دیکشنری برای نمایش
+        embed_dict = embed.to_dict()
+        print(json.dumps(embed_dict, indent=2, ensure_ascii=False))
+        
+        # بررسی جداگانه هر بخش
+        print("\n📊 بررسی جداگانه:")
+        
+        if embed.author:
+            print(f"  👤 AUTHOR:")
+            print(f"     name: {repr(embed.author.name)}")
+            print(f"     url: {repr(embed.author.url)}")
+            print(f"     icon_url: {repr(embed.author.icon_url)}")
+        else:
+            print("  👤 AUTHOR: ندارد")
+        
+        if embed.title:
+            print(f"  📌 TITLE: {repr(embed.title)}")
+        else:
+            print("  📌 TITLE: ندارد")
+        
+        if embed.description:
+            print(f"  📝 DESCRIPTION: {repr(embed.description)}")
+        else:
+            print("  📝 DESCRIPTION: ندارد")
+        
+        if embed.fields:
+            for j, field in enumerate(embed.fields):
+                print(f"  📋 FIELD {j+1}:")
+                print(f"     name: {repr(field.name)}")
+                print(f"     value: {repr(field.value)}")
+                print(f"     inline: {field.inline}")
+        
+        if embed.footer:
+            print(f"  📌 FOOTER: {repr(embed.footer.text)}")
+        else:
+            print("  📌 FOOTER: ندارد")
+        
+        if embed.image:
+            print(f"  🖼️ IMAGE: {repr(embed.image.url)}")
+        else:
+            print("  🖼️ IMAGE: ندارد")
+        
+        if embed.thumbnail:
+            print(f"  🖼️ THUMBNAIL: {repr(embed.thumbnail.url)}")
+        else:
+            print("  🖼️ THUMBNAIL: ندارد")
+    
+    print("=" * 80 + "\n")
+
+# ===== رویداد پیام =====
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
     
     try:
-        # ===== دیباگ برای دیدن ساختار کامل =====
-        print("\n" + "=" * 60)
-        print(f"📨 نویسنده پیام: {message.author}")
-        print(f"📝 محتوای خام: {repr(message.content)}")
-        print(f"🔗 Webhook ID: {message.webhook_id}")
-        print(f"📊 تعداد Embeds: {len(message.embeds)}")
+        # ===== دیباگ =====
+        debug_message(message)
         
-        for i, embed in enumerate(message.embeds):
-            print(f"\n--- Embed {i+1} ---")
-            print(f"عنوان: {repr(embed.title)}")
-            print(f"توضیحات: {repr(embed.description)}")
-            
-            # ===== بررسی Author =====
-            if embed.author:
-                print(f"👤 نویسنده Embed:")
-                print(f"  - نام: {repr(embed.author.name)}")
-                print(f"  - لینک: {repr(embed.author.url)}")
-                print(f"  - آیکون: {repr(embed.author.icon_url)}")
-            else:
-                print("👤 نویسنده Embed: ندارد")
-            
-            # فیلدها
-            if embed.fields:
-                for field in embed.fields:
-                    print(f"فیلد: {repr(field.name)} = {repr(field.value)}")
-            
-            print(f"فوتر: {repr(embed.footer.text) if embed.footer else None}")
-        
-        print("=" * 60 + "\n")
-        
-        # ===== استخراج اسم از Embed Author =====
-        driver_names = []
+        # ===== بعد از دیباگ، می‌تونیم پیام رو بفرستیم =====
+        # اینجا کد ارسال به تلگرام رو می‌ذاریم
         
         for embed in message.embeds:
-            # روش ۱: از Author Embed
+            # ساده‌ترین حالت: فقط محتوای Embed رو بفرست
+            text = f"📨 پیام از دیسکورد\n"
+            
             if embed.author and embed.author.name:
-                author_name = embed.author.name
-                # پاک کردن لینک‌ها از اسم
-                clean_name = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', author_name)
-                if clean_name and "Webhook" not in clean_name:
-                    driver_names.append(clean_name)
-                    print(f"✅ اسم از Embed Author: {clean_name}")
+                text += f"👤 {embed.author.name}\n"
             
-            # روش ۲: از Title (اگر Author نبود)
-            if not driver_names and embed.title:
-                # ممکنه اسم توی عنوان باشه
-                clean_title = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.title)
-                if clean_title and "TrucksBook" not in clean_title:
-                    driver_names.append(clean_title)
-                    print(f"✅ اسم از Title: {clean_title}")
-        
-        # روش ۳: از Webhook Name
-        if not driver_names and message.webhook_id:
-            webhook_name = message.author.name
-            if webhook_name and "Webhook" not in webhook_name:
-                driver_names.append(webhook_name)
-                print(f"✅ اسم از Webhook: {webhook_name}")
-        
-        # روش ۴: از Mentions
-        if not driver_names:
-            for user in message.mentions:
-                driver_names.append(user.display_name)
-                print(f"✅ اسم از Mention: {user.display_name}")
-        
-        # اگر هیچ اسمی پیدا نشد
-        if not driver_names:
-            driver_names = ["راننده"]
-            print("⚠️ اسمی پیدا نشد، از پیش‌فرض استفاده شد")
-        
-        # ===== ارسال به تلگرام =====
-        for embed in message.embeds:
-            # ساخت متن با استفاده از Embed
-            parts = []
-            
-            # اسم راننده
-            name_text = "، ".join(driver_names)
-            parts.append(f"<b>👤 {name_text}</b>")
-            parts.append("")
-            
-            # عنوان
             if embed.title:
-                clean_title = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.title)
-                parts.append(f"<b>{clean_title}</b>")
+                text += f"📌 {embed.title}\n"
             
-            # توضیحات
             if embed.description:
-                clean_desc = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.description)
-                parts.append(clean_desc)
+                text += f"{embed.description}\n"
             
-            # فیلدها
             if embed.fields:
                 for field in embed.fields:
-                    if field.name and field.value:
-                        clean_value = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', field.value)
-                        parts.append(f"<b>{field.name}:</b> {clean_value}")
+                    text += f"{field.name}: {field.value}\n"
             
-            # Footer
             if embed.footer and embed.footer.text:
-                clean_footer = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', embed.footer.text)
-                parts.append(f"\n{clean_footer}")
+                text += f"\n{embed.footer.text}"
             
-            text = "\n".join(parts)
-            if text:
-                await send_message(text)
+            await send_message(text)
         
-        # ===== متن اصلی =====
+        # اگه Embed نبود، متن رو بفرست
         if message.content and not message.embeds:
-            clean_content = re.sub(r'<@!?(\d+)>', '', message.content).strip()
-            name_text = "، ".join(driver_names)
-            await send_message(f"<b>👤 {name_text}</b>\n{clean_content}")
-        
-        # ===== فایل‌ها =====
-        for attachment in message.attachments:
-            name_text = "، ".join(driver_names)
-            caption = f"<b>👤 {name_text}</b>\n📎 {attachment.filename}"
-            await send_message(caption)
+            await send_message(f"📨 {message.author.name}:\n{message.content}")
     
     except Exception as e:
-        print("ERROR:", e)
+        print(f"❌ ERROR: {e}")
+
+@client.event
+async def on_ready():
+    print(f"✅ Logged in as {client.user}")
+
+# ===== اجرا =====
+def run_bot():
+    client.run(DISCORD_TOKEN)
+
+if __name__ == "__main__":
+    if not DISCORD_TOKEN or not TELEGRAM_TOKEN or not CHAT_ID:
+        print("❌ Environment Variables missing!")
+        exit(1)
+    
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
