@@ -95,7 +95,7 @@ def embed_to_text(embed, author_name=None):
     parts = []
     
     if author_name:
-        parts.append(f"<b>👤 {author_name}</b>")
+        parts.append(f"<b>👤 Driver {author_name}</b>")
         parts.append("")
     
     if embed.title:
