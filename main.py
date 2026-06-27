@@ -11,7 +11,7 @@ DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-# ===== Flask App (برای راضی کردن Render) =====
+# ===== Flask App =====
 app = Flask(__name__)
 
 @app.route('/')
@@ -28,28 +28,37 @@ intents.message_content = True
 client = discord.Client(intents=intents)
 
 # ===== توابع تلگرام =====
-async def telegram(method, data):
+async def telegram(method, data, files=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, data=data) as response:
-            return await response.json()
+        if files:
+            async with session.post(url, data=data, files=files) as response:
+                return await response.json()
+        else:
+            async with session.post(url, data=data) as response:
+                return await response.json()
 
-async def send_message(text):
-    await telegram("sendMessage", {
+async def send_message(text, photo_url=None):
+    data = {
         "chat_id": CHAT_ID,
         "text": text,
         "parse_mode": "HTML"
-    })
+    }
+    
+    if photo_url:
+        data["photo"] = photo_url
+        await telegram("sendPhoto", data)
+    else:
+        await telegram("sendMessage", data)
 
-async def send_photo(url):
-    await telegram("sendPhoto", {
-        "chat_id": CHAT_ID,
-        "photo": url
-    })
-
-# ===== تبدیل Embed به متن =====
-def embed_to_text(embed):
+# ===== تبدیل Embed به متن با اسم فرستنده =====
+def embed_to_text(embed, author_name=None):
     parts = []
+    
+    # اسم فرستنده رو اضافه کن
+    if author_name:
+        parts.append(f"<b>👤 {author_name}</b>")
+        parts.append("")  # خط خالی برای فاصله
     
     if embed.title:
         parts.append(f"<b>{embed.title}</b>")
@@ -57,11 +66,13 @@ def embed_to_text(embed):
     if embed.description:
         parts.append(embed.description)
     
+    # فیلدها
     if embed.fields:
         for field in embed.fields:
             if field.name and field.value:
                 parts.append(f"<b>{field.name}:</b> {field.value}")
     
+    # Footer
     if embed.footer and embed.footer.text:
         parts.append(f"\n{embed.footer.text}")
     
@@ -74,31 +85,49 @@ async def on_message(message):
         return
     
     try:
-        # ===== متن اصلی =====
-        if message.content:
-            await send_message(message.content)
-        
         # ===== Embedها =====
         for embed in message.embeds:
-            text = embed_to_text(embed)
-            if text:
-                await send_message(text)
+            # متن رو با اسم فرستنده بساز
+            text = embed_to_text(embed, message.author.display_name)
             
-            if embed.image and embed.image.url:
-                await send_photo(embed.image.url)
-            elif embed.thumbnail and embed.thumbnail.url:
-                await send_photo(embed.thumbnail.url)
-        
-        # ===== فایل‌ها =====
-        for attachment in message.attachments:
-            if attachment.content_type:
-                if attachment.content_type.startswith("image"):
-                    await send_photo(attachment.url)
+            if text:
+                # عکس اصلی Embed رو پیدا کن
+                photo_url = None
+                if embed.image and embed.image.url:
+                    photo_url = embed.image.url
+                elif embed.thumbnail and embed.thumbnail.url:
+                    photo_url = embed.thumbnail.url
+                
+                # ارسال متن و عکس با هم
+                if photo_url:
+                    await send_message(text, photo_url)
                 else:
-                    await telegram("sendDocument", {
-                        "chat_id": CHAT_ID,
-                        "document": attachment.url
-                    })
+                    await send_message(text)
+        
+        # ===== متن اصلی =====
+        if message.content and not message.embeds:
+            # اگه متن و عکس Attachment داره
+            if message.attachments:
+                for attachment in message.attachments:
+                    if attachment.content_type and attachment.content_type.startswith("image"):
+                        caption = f"<b>👤 {message.author.display_name}</b>\n{message.content}"
+                        await send_message(caption, attachment.url)
+                        break
+                else:
+                    await send_message(f"<b>👤 {message.author.display_name}</b>\n{message.content}")
+            else:
+                await send_message(f"<b>👤 {message.author.display_name}</b>\n{message.content}")
+        
+        # ===== فایل‌ها (غیر از عکس) =====
+        for attachment in message.attachments:
+            if attachment.content_type and not attachment.content_type.startswith("image"):
+                caption = f"<b>👤 {message.author.display_name}</b>\n📎 {attachment.filename}"
+                await telegram("sendDocument", {
+                    "chat_id": CHAT_ID,
+                    "document": attachment.url,
+                    "caption": caption,
+                    "parse_mode": "HTML"
+                })
     
     except Exception as e:
         print("ERROR:", e)
@@ -116,10 +145,8 @@ if __name__ == "__main__":
         print("❌ Environment Variables missing!")
         exit(1)
     
-    # ربات دیسکورد رو توی یه ترد جدا اجرا کن
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     
-    # فلاسک رو اجرا کن تا Render خوشحال بشه
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
