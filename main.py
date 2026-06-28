@@ -28,6 +28,14 @@ intents = Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
+# ===== لیست چنل‌های مجاز =====
+ALLOWED_CHANNELS = [
+    1119716452065366026,
+    1087031811877654538,
+    1119726229621321819,
+    1087132698096705726
+]
+
 # ===== دیکشنری کامل پرچم‌ها =====
 FLAG_MAP = {
     ':flag_us:': '🇺🇸', ':flag_ca:': '🇨🇦', ':flag_mx:': '🇲🇽',
@@ -153,17 +161,16 @@ def embed_to_text(embed, author_name=None):
                 elif "Cargo" in field.name or "Details" in field.name:
                     parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Accepted distance" in field.name:
-                    parts.append(f"🏁 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f" <b>{clean_name}:</b> {clean_value}")
                 elif "Profit" in field.name:
-                    parts.append(f"💰 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Truck" in field.name:
-                    parts.append(f"🚚 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Statistics" in field.name:
-                    parts.append(f"👮🏻‍♂️ <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Rank" in field.name:
-                    # برای رنک، arrow_up رو جدا تبدیل کن
                     clean_value = clean_value.replace(':arrow_up:', '⬆️')
-                    parts.append(f"📊 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 else:
                     parts.append(f"<b>{clean_name}:</b> {clean_value}")
     
@@ -178,6 +185,10 @@ def embed_to_text(embed, author_name=None):
 @client.event
 async def on_message(message):
     if message.author == client.user:
+        return
+    
+    # ===== فقط چنل‌های مجاز =====
+    if message.channel.id not in ALLOWED_CHANNELS:
         return
     
     try:
@@ -228,6 +239,7 @@ async def on_message(message):
 @client.event
 async def on_ready():
     print(f"✅ Logged in as {client.user}")
+    print(f"📋 Monitoring channels: {ALLOWED_CHANNELS}")
 
 # ===== اجرا =====
 def run_bot():
