@@ -125,7 +125,7 @@ def embed_to_text(embed, author_name=None):
     
     # 👤 اسم راننده
     if author_name:
-        parts.append(f"👤 <b>{author_name}</b>")
+        parts.append(f"👤Driver <b>{author_name}</b>")
         parts.append("")
     
     # 📌 Job delivery
@@ -136,7 +136,7 @@ def embed_to_text(embed, author_name=None):
     # 🎗 وضعیت (Real, WoTr)
     if embed.description:
         clean_desc = convert_emoji(embed.description)
-        parts.append(f"🎗 {clean_desc}")
+        parts.append(f"{clean_desc}")
     
     # فیلدها با ایموجی مناسب
     if embed.fields:
@@ -147,11 +147,11 @@ def embed_to_text(embed, author_name=None):
                 
                 # اضافه کردن ایموجی بر اساس اسم فیلد
                 if "From" in field.name:
-                    parts.append(f"🟢 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "To" in field.name:
-                    parts.append(f"🔴 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Cargo" in field.name or "Details" in field.name:
-                    parts.append(f"📦 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Accepted distance" in field.name:
                     parts.append(f"🏁 <b>{clean_name}:</b> {clean_value}")
                 elif "Profit" in field.name:
