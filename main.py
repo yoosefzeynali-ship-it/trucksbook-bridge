@@ -161,6 +161,8 @@ def embed_to_text(embed, author_name=None):
                 elif "Statistics" in field.name:
                     parts.append(f"👮🏻‍♂️ <b>{clean_name}:</b> {clean_value}")
                 elif "Rank" in field.name:
+                    # برای رنک، arrow_up رو جدا تبدیل کن
+                    clean_value = clean_value.replace(':arrow_up:', '⬆️')
                     parts.append(f"📊 <b>{clean_name}:</b> {clean_value}")
                 else:
                     parts.append(f"<b>{clean_name}:</b> {clean_value}")
