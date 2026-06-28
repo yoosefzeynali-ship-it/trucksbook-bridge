@@ -124,14 +124,14 @@ def embed_to_text(embed, author_name=None):
     parts = []
     
     if author_name:
-        parts.append(f"👤 <b>{author_name}</b>")
+        parts.append(f"👤Driver <b>{author_name}</b>")
         parts.append("")
     
     if embed.title:
-        parts.append(f"📌 {convert_emoji(embed.title)}")
+        parts.append(f{convert_emoji(embed.title)}")
     
     if embed.description:
-        parts.append(f"🎗 {convert_emoji(embed.description)}")
+        parts.append(f"{convert_emoji(embed.description)}")
     
     if embed.fields:
         for field in embed.fields:
@@ -140,22 +140,22 @@ def embed_to_text(embed, author_name=None):
                 clean_value = convert_emoji(field.value)
                 
                 if "From" in field.name:
-                    parts.append(f"🟢 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "To" in field.name:
-                    parts.append(f"🔴 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Cargo" in field.name or "Details" in field.name:
-                    parts.append(f"📦 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Accepted distance" in field.name:
-                    parts.append(f"🏁 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Profit" in field.name:
-                    parts.append(f"💰 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Truck" in field.name:
-                    parts.append(f"🚚 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Statistics" in field.name:
-                    parts.append(f"👮🏻‍♂️ <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 elif "Rank" in field.name:
                     clean_value = clean_value.replace(':arrow_up:', '⬆️')
-                    parts.append(f"📊 <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
                 else:
                     parts.append(f"<b>{clean_name}:</b> {clean_value}")
     
