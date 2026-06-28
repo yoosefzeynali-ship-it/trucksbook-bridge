@@ -131,7 +131,7 @@ def embed_to_text(embed, author_name=None):
     # 📌 Job delivery
     if embed.title:
         clean_title = convert_emoji(embed.title)
-        parts.append(f"📌 {clean_title}")
+        parts.append(f"{clean_title}")
     
     # 🎗 وضعیت (Real, WoTr)
     if embed.description:
