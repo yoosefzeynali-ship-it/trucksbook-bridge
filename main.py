@@ -73,7 +73,6 @@ FLAG_MAP = {
     ':flag_bo:': '🇧🇴', ':flag_py:': '🇵🇾', ':flag_uy:': '🇺🇾',
 }
 
-# ===== دیکشنری ایموجی‌های دیگر =====
 OTHER_EMOJI_MAP = {
     ':arrow_up:': '⬆️',
     ':arrow_down:': '⬇️',
@@ -96,23 +95,17 @@ OTHER_EMOJI_MAP = {
     ':globe_with_meridians:': '🌐',
 }
 
-# ===== ترکیب دیکشنری‌ها =====
 EMOJI_MAP = {**FLAG_MAP, **OTHER_EMOJI_MAP}
 
 def convert_emoji(text):
-    """تبدیل کدهای ایموجی دیسکورد به یونیکد"""
     if not text:
         return text
-    
     for code, emoji in EMOJI_MAP.items():
         text = text.replace(code, emoji)
-    
     return text
 
-# ===== فوتر پیام =====
 FOOTER_TEXT = "\n\n⚡️@Caspiancboy⚡️"
 
-# ===== توابع تلگرام =====
 async def telegram(method, data):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
     async with aiohttp.ClientSession() as session:
@@ -127,87 +120,88 @@ async def send_message(text):
         "parse_mode": "HTML"
     })
 
-# ===== تبدیل Embed به متن با ایموجی‌های جدید =====
 def embed_to_text(embed, author_name=None):
     parts = []
     
-    # 👤 اسم راننده
     if author_name:
-        parts.append(f"👤Driver <b>{author_name}</b>")
+        parts.append(f"👤 <b>{author_name}</b>")
         parts.append("")
     
-    # 📌 Job delivery
     if embed.title:
-        clean_title = convert_emoji(embed.title)
-        parts.append(f"{clean_title}")
+        parts.append(f"📌 {convert_emoji(embed.title)}")
     
-    # 🎗 وضعیت (Real, WoTr)
     if embed.description:
-        clean_desc = convert_emoji(embed.description)
-        parts.append(f"{clean_desc}")
+        parts.append(f"🎗 {convert_emoji(embed.description)}")
     
-    # فیلدها با ایموجی مناسب
     if embed.fields:
         for field in embed.fields:
             if field.name and field.value:
                 clean_name = convert_emoji(field.name)
                 clean_value = convert_emoji(field.value)
                 
-                # اضافه کردن ایموجی بر اساس اسم فیلد
                 if "From" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"🟢 <b>{clean_name}:</b> {clean_value}")
                 elif "To" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"🔴 <b>{clean_name}:</b> {clean_value}")
                 elif "Cargo" in field.name or "Details" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"📦 <b>{clean_name}:</b> {clean_value}")
                 elif "Accepted distance" in field.name:
-                    parts.append(f" <b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"🏁 <b>{clean_name}:</b> {clean_value}")
                 elif "Profit" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"💰 <b>{clean_name}:</b> {clean_value}")
                 elif "Truck" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"🚚 <b>{clean_name}:</b> {clean_value}")
                 elif "Statistics" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"👮🏻‍♂️ <b>{clean_name}:</b> {clean_value}")
                 elif "Rank" in field.name:
                     clean_value = clean_value.replace(':arrow_up:', '⬆️')
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
+                    parts.append(f"📊 <b>{clean_name}:</b> {clean_value}")
                 else:
                     parts.append(f"<b>{clean_name}:</b> {clean_value}")
     
-    # Footer
     if embed.footer and embed.footer.text:
-        clean_footer = convert_emoji(embed.footer.text)
-        parts.append(f"\n{clean_footer}")
+        parts.append(f"\n{convert_emoji(embed.footer.text)}")
     
     return "\n".join(parts) if parts else None
 
-# ===== رویداد پیام =====
+# ===== رویداد پیام با دیباگ کامل =====
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
     
-    # ===== فقط چنل‌های مجاز =====
+    # ===== دیباگ: همه پیام‌ها رو توی لاگ نشون بده =====
+    print("=" * 60)
+    print(f"📨 پیام جدید دریافت شد!")
+    print(f"📌 چنل ID: {message.channel.id}")
+    print(f"📌 نام چنل: {message.channel.name}")
+    print(f"📌 نویسنده: {message.author}")
+    print(f"📝 محتوا: {message.content[:100] if message.content else '(خالی)'}")
+    print(f"📊 تعداد Embedها: {len(message.embeds)}")
+    
+    # ===== بررسی چنل =====
     if message.channel.id not in ALLOWED_CHANNELS:
+        print(f"⛔ چنل {message.channel.id} مجاز نیست. نادیده گرفته شد.")
+        print("=" * 60)
         return
+    
+    print(f"✅ چنل مجاز است! ادامه پردازش...")
+    print("=" * 60)
     
     try:
         # استخراج اسم راننده
         driver_name = None
         
-        # از Embed Author
         for embed in message.embeds:
             if embed.author and embed.author.name:
                 driver_name = embed.author.name
                 break
         
-        # از Webhook Name
         if not driver_name and message.webhook_id:
             webhook_name = message.author.name
             if webhook_name and "Webhook" not in webhook_name:
                 driver_name = webhook_name
         
-        # از Mentions
         if not driver_name and message.mentions:
             driver_name = message.mentions[0].display_name
         
@@ -215,6 +209,7 @@ async def on_message(message):
         for embed in message.embeds:
             text = embed_to_text(embed, driver_name)
             if text:
+                print(f"📤 ارسال به تلگرام: {text[:50]}...")
                 await send_message(text)
         
         # ===== ارسال متن اصلی =====
@@ -234,12 +229,23 @@ async def on_message(message):
             await send_message(caption)
     
     except Exception as e:
-        print("ERROR:", e)
+        print(f"❌ ERROR: {e}")
 
 @client.event
 async def on_ready():
-    print(f"✅ Logged in as {client.user}")
-    print(f"📋 Monitoring channels: {ALLOWED_CHANNELS}")
+    print("=" * 60)
+    print(f"✅ ربات با موفقیت وارد شد: {client.user}")
+    print(f"📋 چنل‌های مجاز:")
+    for channel_id in ALLOWED_CHANNELS:
+        try:
+            channel = client.get_channel(channel_id)
+            if channel:
+                print(f"   ✅ {channel_id} - #{channel.name}")
+            else:
+                print(f"   ❌ {channel_id} - (ربات به این چنل دسترسی ندارد!)")
+        except:
+            print(f"   ❌ {channel_id} - (خطا در دریافت اطلاعات)")
+    print("=" * 60)
 
 # ===== اجرا =====
 def run_bot():
