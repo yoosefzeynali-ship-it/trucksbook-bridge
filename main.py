@@ -102,7 +102,7 @@ def convert_emoji(text):
     return text
 
 # ===== فوتر پیام =====
-FOOTER_TEXT = "\n\n⚡️IR-Caspian⚡️"
+FOOTER_TEXT = "\n\n⚡️@Caspiancboy⚡️"
 
 # ===== توابع تلگرام =====
 async def telegram(method, data):
