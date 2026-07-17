@@ -1,246 +1,338 @@
 import os
+import re
+import html
 import asyncio
-import threading
 import aiohttp
 import discord
 from discord import Intents
-from flask import Flask
-import re
 
-# ===== Environment Variables =====
-DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+# ==========================
+# Environment Variables
+# ==========================
 
-# ===== Flask App =====
-app = Flask(__name__)
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-@app.route('/')
-def home():
-    return "✅ Discord Bot is running!"
+if not DISCORD_TOKEN:
+    raise RuntimeError("DISCORD_TOKEN not found")
 
-@app.route('/health')
-def health():
-    return "OK", 200
+if not TELEGRAM_TOKEN:
+    raise RuntimeError("TELEGRAM_TOKEN not found")
 
-# ===== کلاینت دیسکورد =====
-intents = Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
+if not CHAT_ID:
+    raise RuntimeError("CHAT_ID not found")
 
-# ===== لیست چنل‌های مجاز =====
-ALLOWED_CHANNELS = [
+# ==========================
+# Discord Settings
+# ==========================
+
+ALLOWED_CHANNELS = {
     1119716452065366026,
     1087031811877654538,
     1119726229621321819,
     1087132698096705726
-]
-
-# ===== دیکشنری کامل پرچم‌ها =====
-FLAG_MAP = {
-    ':flag_us:': '🇺🇸', ':flag_ca:': '🇨🇦', ':flag_mx:': '🇲🇽',
-    ':flag_uk:': '🇬🇧', ':flag_gb:': '🇬🇧', ':flag_de:': '🇩🇪',
-    ':flag_fr:': '🇫🇷', ':flag_it:': '🇮🇹', ':flag_es:': '🇪🇸',
-    ':flag_pt:': '🇵🇹', ':flag_nl:': '🇳🇱', ':flag_be:': '🇧🇪',
-    ':flag_at:': '🇦🇹', ':flag_ch:': '🇨🇭', ':flag_se:': '🇸🇪',
-    ':flag_no:': '🇳🇴', ':flag_dk:': '🇩🇰', ':flag_fi:': '🇫🇮',
-    ':flag_pl:': '🇵🇱', ':flag_cz:': '🇨🇿', ':flag_sk:': '🇸🇰',
-    ':flag_hu:': '🇭🇺', ':flag_ro:': '🇷🇴', ':flag_bg:': '🇧🇬',
-    ':flag_gr:': '🇬🇷', ':flag_tr:': '🇹🇷', ':flag_ie:': '🇮🇪',
-    ':flag_is:': '🇮🇸', ':flag_lt:': '🇱🇹', ':flag_lv:': '🇱🇻',
-    ':flag_ee:': '🇪🇪', ':flag_ru:': '🇷🇺', ':flag_ua:': '🇺🇦',
-    ':flag_ir:': '🇮🇷', ':flag_ae:': '🇦🇪', ':flag_sa:': '🇸🇦',
-    ':flag_in:': '🇮🇳', ':flag_cn:': '🇨🇳', ':flag_jp:': '🇯🇵',
-    ':flag_kr:': '🇰🇷', ':flag_vn:': '🇻🇳', ':flag_th:': '🇹🇭',
-    ':flag_my:': '🇲🇾', ':flag_sg:': '🇸🇬', ':flag_ph:': '🇵🇭',
-    ':flag_id:': '🇮🇩', ':flag_pk:': '🇵🇰', ':flag_bd:': '🇧🇩',
-    ':flag_np:': '🇳🇵', ':flag_lk:': '🇱🇰', ':flag_kh:': '🇰🇭',
-    ':flag_af:': '🇦🇫', ':flag_iq:': '🇮🇶', ':flag_sy:': '🇸🇾',
-    ':flag_jo:': '🇯🇴', ':flag_lb:': '🇱🇧', ':flag_il:': '🇮🇱',
-    ':flag_ye:': '🇾🇪', ':flag_om:': '🇴🇲', ':flag_qa:': '🇶🇦',
-    ':flag_kw:': '🇰🇼', ':flag_eg:': '🇪🇬', ':flag_za:': '🇿🇦',
-    ':flag_ng:': '🇳🇬', ':flag_ke:': '🇰🇪', ':flag_tz:': '🇹🇿',
-    ':flag_gh:': '🇬🇭', ':flag_dz:': '🇩🇿', ':flag_ma:': '🇲🇦',
-    ':flag_tn:': '🇹🇳', ':flag_ly:': '🇱🇾', ':flag_et:': '🇪🇹',
-    ':flag_so:': '🇸🇴', ':flag_ug:': '🇺🇬', ':flag_rw:': '🇷🇼',
-    ':flag_cd:': '🇨🇩', ':flag_cg:': '🇨🇬', ':flag_ga:': '🇬🇦',
-    ':flag_cm:': '🇨🇲', ':flag_ci:': '🇨🇮', ':flag_sn:': '🇸🇳',
-    ':flag_ml:': '🇲🇱', ':flag_bf:': '🇧🇫', ':flag_ne:': '🇳🇪',
-    ':flag_td:': '🇹🇩', ':flag_au:': '🇦🇺', ':flag_nz:': '🇳🇿',
-    ':flag_fj:': '🇫🇯', ':flag_pg:': '🇵🇬', ':flag_br:': '🇧🇷',
-    ':flag_ar:': '🇦🇷', ':flag_cl:': '🇨🇱', ':flag_co:': '🇨🇴',
-    ':flag_pe:': '🇵🇪', ':flag_ve:': '🇻🇪', ':flag_ec:': '🇪🇨',
-    ':flag_bo:': '🇧🇴', ':flag_py:': '🇵🇾', ':flag_uy:': '🇺🇾',
 }
 
-OTHER_EMOJI_MAP = {
-    ':arrow_up:': '⬆️',
-    ':arrow_double_up:': '⏫',
-}
+intents = Intents.default()
+intents.message_content = True
 
-EMOJI_MAP = {**FLAG_MAP, **OTHER_EMOJI_MAP}
+client = discord.Client(intents=intents)
 
-def convert_emoji(text):
-    if not text:
-        return text
-    for code, emoji in EMOJI_MAP.items():
-        text = text.replace(code, emoji)
-    return text
+# ==========================
+# Telegram
+# ==========================
 
-FOOTER_TEXT = "\n\n⚡️@Caspiancboy⚡️"
+session = None
 
-async def telegram(method, data):
+async def get_session():
+    global session
+
+    if session is None or session.closed:
+        session = aiohttp.ClientSession()
+
+    return session
+
+
+async def telegram(method: str, data: dict):
+
+    s = await get_session()
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, data=data) as response:
-            return await response.json()
+
+    async with s.post(url, data=data) as resp:
+
+        result = await resp.text()
+
+        if resp.status != 200:
+            print("Telegram Error")
+            print(resp.status)
+            print(result)
+
+        return result
+
 
 async def send_message(text):
-    full_text = text + FOOTER_TEXT
-    await telegram("sendMessage", {
+
+    if not text:
+        return
+
+    text = html.escape(text)
+
+    await telegram(
+        "sendMessage",
+        {
+            "chat_id": CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        }
+    )
+
+
+async def send_photo(url, caption=None):
+
+    data = {
         "chat_id": CHAT_ID,
-        "text": full_text,
-        "parse_mode": "HTML"
-    })
+        "photo": url
+    }
 
-def embed_to_text(embed, author_name=None):
-    parts = []
-    
-    if author_name:
-        parts.append(f"Driver <b>{author_name}</b>")
-        parts.append("")
-    
+    if caption:
+        data["caption"] = html.escape(caption)
+        data["parse_mode"] = "HTML"
+
+    await telegram("sendPhoto", data)
+
+
+async def send_document(url, caption=None):
+
+    data = {
+        "chat_id": CHAT_ID,
+        "document": url
+    }
+
+    if caption:
+        data["caption"] = html.escape(caption)
+        data["parse_mode"] = "HTML"
+
+    await telegram("sendDocument", data)
+    # ==========================
+# Emoji Mapping
+# ==========================
+
+EMOJI_MAP = {
+    ":flag_ir:": "🇮🇷",
+    ":flag_us:": "🇺🇸",
+    ":flag_gb:": "🇬🇧",
+    ":flag_uk:": "🇬🇧",
+    ":flag_de:": "🇩🇪",
+    ":flag_fr:": "🇫🇷",
+    ":flag_it:": "🇮🇹",
+    ":flag_es:": "🇪🇸",
+    ":flag_pl:": "🇵🇱",
+    ":flag_nl:": "🇳🇱",
+    ":flag_be:": "🇧🇪",
+    ":flag_tr:": "🇹🇷",
+    ":flag_ru:": "🇷🇺",
+
+    ":arrow_up:": "⬆️",
+    ":arrow_double_up:": "⏫",
+    ":white_check_mark:": "✅",
+    ":x:": "❌",
+    ":warning:": "⚠️"
+}
+
+emoji_pattern = re.compile(
+    "|".join(re.escape(x) for x in EMOJI_MAP.keys())
+)
+
+
+def convert_emoji(text):
+
+    if not text:
+        return ""
+
+    return emoji_pattern.sub(
+        lambda m: EMOJI_MAP[m.group(0)],
+        text
+    )
+
+
+# ==========================
+# Embed Parser
+# ==========================
+
+def embed_to_text(embed: discord.Embed, driver=None):
+
+    lines = []
+
+    if driver:
+        lines.append(f"👤 {driver}")
+        lines.append("")
+
     if embed.title:
-        parts.append(f{convert_emoji(embed.title)}")
-    
-    if embed.description:
-        parts.append(f"{convert_emoji(embed.description)}")
-    
-    if embed.fields:
-        for field in embed.fields:
-            if field.name and field.value:
-                clean_name = convert_emoji(field.name)
-                clean_value = convert_emoji(field.value)
-                
-                if "From" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "To" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Cargo" in field.name or "Details" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Accepted distance" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Profit" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Truck" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Statistics" in field.name:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                elif "Rank" in field.name:
-                    clean_value = clean_value.replace(':arrow_up:', '⬆️')
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-                else:
-                    parts.append(f"<b>{clean_name}:</b> {clean_value}")
-    
-    if embed.footer and embed.footer.text:
-        parts.append(f"\n{convert_emoji(embed.footer.text)}")
-    
-    return "\n".join(parts) if parts else None
+        lines.append(f"📦 {convert_emoji(embed.title)}")
 
-# ===== رویداد پیام با دیباگ کامل =====
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
-    
-    # ===== دیباگ: همه پیام‌ها رو توی لاگ نشون بده =====
-    print("=" * 60)
-    print(f"📨 پیام جدید دریافت شد!")
-    print(f"📌 چنل ID: {message.channel.id}")
-    print(f"📌 نام چنل: {message.channel.name}")
-    print(f"📌 نویسنده: {message.author}")
-    print(f"📝 محتوا: {message.content[:100] if message.content else '(خالی)'}")
-    print(f"📊 تعداد Embedها: {len(message.embeds)}")
-    
-    # ===== بررسی چنل =====
-    if message.channel.id not in ALLOWED_CHANNELS:
-        print(f"⛔ چنل {message.channel.id} مجاز نیست. نادیده گرفته شد.")
-        print("=" * 60)
-        return
-    
-    print(f"✅ چنل مجاز است! ادامه پردازش...")
-    print("=" * 60)
-    
-    try:
-        # استخراج اسم راننده
-        driver_name = None
-        
-        for embed in message.embeds:
-            if embed.author and embed.author.name:
-                driver_name = embed.author.name
-                break
-        
-        if not driver_name and message.webhook_id:
-            webhook_name = message.author.name
-            if webhook_name and "Webhook" not in webhook_name:
-                driver_name = webhook_name
-        
-        if not driver_name and message.mentions:
-            driver_name = message.mentions[0].display_name
-        
-        # ===== ارسال Embedها =====
-        for embed in message.embeds:
-            text = embed_to_text(embed, driver_name)
-            if text:
-                print(f"📤 ارسال به تلگرام: {text[:50]}...")
-                await send_message(text)
-        
-        # ===== ارسال متن اصلی =====
-        if message.content and not message.embeds:
-            clean_content = convert_emoji(message.content)
-            if driver_name:
-                await send_message(f"👤 <b>{driver_name}</b>\n{clean_content}")
-            else:
-                await send_message(clean_content)
-        
-        # ===== فایل‌ها =====
-        for attachment in message.attachments:
-            if driver_name:
-                caption = f"👤 <b>{driver_name}</b>\n📎 {attachment.filename}"
-            else:
-                caption = f"📎 {attachment.filename}"
-            await send_message(caption)
-    
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
+    if embed.description:
+        lines.append(convert_emoji(embed.description))
+
+    if embed.fields:
+
+        lines.append("")
+
+        for field in embed.fields:
+
+            name = convert_emoji(field.name or "")
+            value = convert_emoji(field.value or "")
+
+            if not value:
+                continue
+
+            lines.append(f"<b>{name}</b>")
+            lines.append(value)
+            lines.append("")
+
+    if embed.footer and embed.footer.text:
+
+        lines.append("--------------------")
+        lines.append(convert_emoji(embed.footer.text))
+
+    return "\n".join(lines).strip()
+
+
+# ==========================
+# Driver Name
+# ==========================
+
+def get_driver_name(message):
+
+    for embed in message.embeds:
+
+        if embed.author and embed.author.name:
+            return embed.author.name
+
+    if message.author and message.author.name:
+
+        name = message.author.name
+
+        if "webhook" not in name.lower():
+            return name
+
+    return None
+    # ==========================
+# Discord Events
+# ==========================
 
 @client.event
 async def on_ready():
+
     print("=" * 60)
-    print(f"✅ ربات با موفقیت وارد شد: {client.user}")
-    print(f"📋 چنل‌های مجاز:")
+    print(f"✅ Logged in as {client.user}")
+    print(f"Guilds : {len(client.guilds)}")
+    print("=" * 60)
+
     for channel_id in ALLOWED_CHANNELS:
-        try:
-            channel = client.get_channel(channel_id)
-            if channel:
-                print(f"   ✅ {channel_id} - #{channel.name}")
-            else:
-                print(f"   ❌ {channel_id} - (ربات به این چنل دسترسی ندارد!)")
-        except:
-            print(f"   ❌ {channel_id} - (خطا در دریافت اطلاعات)")
+
+        channel = client.get_channel(channel_id)
+
+        if channel:
+            print(f"✅ {channel.guild.name} -> #{channel.name}")
+        else:
+            print(f"❌ Cannot access channel {channel_id}")
+
     print("=" * 60)
 
-# ===== اجرا =====
-def run_bot():
-    client.run(DISCORD_TOKEN)
 
-if __name__ == "__main__":
-    if not DISCORD_TOKEN or not TELEGRAM_TOKEN or not CHAT_ID:
-        print("❌ Environment Variables missing!")
-        exit(1)
-    
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+@client.event
+async def on_message(message):
+
+    # پیام خود بات
+    if message.author.id == client.user.id:
+        return
+
+    # فقط چنل‌های مجاز
+    if message.channel.id not in ALLOWED_CHANNELS:
+        return
+
+    print(f"\n📨 Message received")
+    print(f"Channel : {message.channel.name}")
+    print(f"Author  : {message.author}")
+    print(f"Webhook : {message.webhook_id}")
+    print(f"Embeds  : {len(message.embeds)}")
+    print(f"Files   : {len(message.attachments)}")
+
+    driver = get_driver_name(message)
+
+    try:
+
+        # =====================
+        # متن معمولی
+        # =====================
+
+        if message.content.strip():
+
+            text = convert_emoji(message.content)
+
+            if driver:
+                text = f"👤 {driver}\n\n{text}"
+
+            await send_message(text)
+
+        # =====================
+        # Embed
+        # =====================
+
+        for embed in message.embeds:
+
+            text = embed_to_text(embed, driver)
+
+            if text:
+                await send_message(text)
+
+            # تصویر اصلی
+            if embed.image and embed.image.url:
+
+                await send_photo(
+                    embed.image.url,
+                    driver
+                )
+
+            # Thumbnail
+            elif embed.thumbnail and embed.thumbnail.url:
+
+                await send_photo(
+                    embed.thumbnail.url,
+                    driver
+                )
+
+        # =====================
+        # Attachments
+        # =====================
+
+        for attachment in message.attachments:
+
+            ctype = attachment.content_type or ""
+
+            print(f"Attachment : {attachment.filename}")
+
+            if ctype.startswith("image"):
+
+                await send_photo(
+                    attachment.url,
+                    attachment.filename
+                )
+
+            else:
+
+                await send_document(
+                    attachment.url,
+                    attachment.filename
+                )
+
+    except Exception as e:
+
+        print("=" * 60)
+        print("❌ ERROR")
+        print(type(e).__name__)
+        print(e)
+        print("=" * 60)
