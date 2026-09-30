@@ -1,3 +1,4 @@
+```python
 import os
 import re
 import html
@@ -56,6 +57,7 @@ session = None
 
 
 async def get_session():
+
     global session
 
     if session is None or session.closed:
@@ -98,22 +100,6 @@ async def send_message(text):
     if not text:
         return
 
-    # IMPORTANT:
-    # Do NOT html.escape the complete message here.
-    #
-    # embed_to_text() intentionally creates Telegram HTML
-    # tags such as <b>...</b>.
-    #
-    # Escaping the whole message would turn:
-    #
-    # <b>From</b>
-    #
-    # into:
-    #
-    # &lt;b&gt;From&lt;/b&gt;
-    #
-    # and Telegram would display the tags as normal text.
-
     await telegram(
         "sendMessage",
         {
@@ -137,6 +123,7 @@ async def send_photo(url, caption=None):
     }
 
     if caption:
+
         data["caption"] = html.escape(caption)
         data["parse_mode"] = "HTML"
 
@@ -158,6 +145,7 @@ async def send_document(url, caption=None):
     }
 
     if caption:
+
         data["caption"] = html.escape(caption)
         data["parse_mode"] = "HTML"
 
@@ -216,16 +204,77 @@ def convert_emoji(text):
 
 
 # ============================================================
-# Discord Embed → Telegram HTML Text
+# Clean Text
+# ============================================================
+
+def clean_text(text):
+
+    if not text:
+        return ""
+
+    text = convert_emoji(text)
+
+    # Remove excessive spaces
+    text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove excessive blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
+
+
+# ============================================================
+# Format Job Details
+# ============================================================
+
+def format_details(value):
+
+    value = clean_text(value)
+
+    if not value:
+        return []
+
+    lines = [
+        line.strip()
+        for line in value.splitlines()
+        if line.strip()
+    ]
+
+    result = []
+
+    for line in lines:
+
+        # ----------------------------------------------------
+        # Cargo
+        # ----------------------------------------------------
+
+        if line.lower().startswith("cargo:"):
+
+            result.append(
+                f"📦 <b>Details:</b> {html.escape(line)}"
+            )
+
+        else:
+
+            result.append(
+                html.escape(line)
+            )
+
+    return result
+
+
+# ============================================================
+# Discord Embed → Telegram Job Format
 # ============================================================
 
 def embed_to_text(embed: discord.Embed, driver=None):
 
     lines = []
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # Driver
-    # --------------------------------------------------------
+    # ========================================================
 
     if driver:
 
@@ -236,87 +285,121 @@ def embed_to_text(embed: discord.Embed, driver=None):
         lines.append("")
 
 
-    # --------------------------------------------------------
-    # Embed Title
-    # --------------------------------------------------------
+    # ========================================================
+    # Job Title
+    # ========================================================
 
     if embed.title:
 
-        title = convert_emoji(embed.title)
+        title = clean_text(embed.title)
 
         lines.append(
-            f"📦 {html.escape(title)}"
+            f"📌 {html.escape(title)}"
         )
 
 
-    # --------------------------------------------------------
-    # Embed Description
-    # --------------------------------------------------------
+    # ========================================================
+    # Job Description
+    # ========================================================
 
     if embed.description:
 
-        description = convert_emoji(
+        description = clean_text(
             embed.description
         )
 
-        lines.append(
-            html.escape(description)
-        )
-
-
-    # --------------------------------------------------------
-    # Embed Fields
-    # --------------------------------------------------------
-
-    if embed.fields:
-
-        lines.append("")
-
-        for field in embed.fields:
-
-            name = convert_emoji(
-                field.name or ""
-            )
-
-            value = convert_emoji(
-                field.value or ""
-            )
-
-            if not value:
-                continue
-
-            # Escape ONLY the actual text.
-            # The <b> tags themselves remain valid Telegram HTML.
-
-            name = html.escape(name)
-            value = html.escape(value)
+        if description:
 
             lines.append(
-                f"<b>{name}</b>"
+                f"🎗 {html.escape(description)}"
             )
 
-            lines.append(value)
 
-            lines.append("")
+    # ========================================================
+    # Embed Fields
+    # ========================================================
+
+    for field in embed.fields:
+
+        name = clean_text(
+            field.name or ""
+        )
+
+        value = clean_text(
+            field.value or ""
+        )
+
+        if not value:
+            continue
 
 
-    # --------------------------------------------------------
+        # ====================================================
+        # FROM
+        # ====================================================
+
+        if name.lower() == "from":
+
+            lines.append(
+                f"🟢 <b>From:</b> {html.escape(value)}"
+            )
+
+
+        # ====================================================
+        # TO
+        # ====================================================
+
+        elif name.lower() == "to":
+
+            lines.append(
+                f"🔴 <b>To:</b> {html.escape(value)}"
+            )
+
+
+        # ====================================================
+        # DETAILS
+        # ====================================================
+
+        elif name.lower() == "details":
+
+            details = format_details(value)
+
+            lines.extend(details)
+
+
+        # ====================================================
+        # Other Fields
+        # ====================================================
+
+        else:
+
+            escaped_name = html.escape(name)
+
+            escaped_value = html.escape(value)
+
+            lines.append(
+                f"<b>{escaped_name}:</b> {escaped_value}"
+            )
+
+
+    # ========================================================
     # Footer
-    # --------------------------------------------------------
+    # ========================================================
 
     if embed.footer and embed.footer.text:
 
-        lines.append(
-            "--------------------"
-        )
-
-        footer = convert_emoji(
+        footer = clean_text(
             embed.footer.text
         )
 
-        lines.append(
-            html.escape(footer)
-        )
+        if footer:
+
+            lines.append("")
+            lines.append(
+                "--------------------"
+            )
+            lines.append(
+                html.escape(footer)
+            )
 
 
     return "\n".join(lines).strip()
@@ -394,10 +477,6 @@ async def on_ready():
 @client.event
 async def on_message(message):
 
-    # --------------------------------------------------------
-    # Debug information
-    # --------------------------------------------------------
-
     print()
     print("=" * 60)
     print("📨 DISCORD MESSAGE EVENT RECEIVED")
@@ -442,9 +521,9 @@ async def on_message(message):
     print("=" * 60)
 
 
-    # --------------------------------------------------------
-    # Ignore our own messages
-    # --------------------------------------------------------
+    # ========================================================
+    # Ignore own messages
+    # ========================================================
 
     if message.author.id == client.user.id:
 
@@ -455,9 +534,9 @@ async def on_message(message):
         return
 
 
-    # --------------------------------------------------------
-    # Check allowed channel
-    # --------------------------------------------------------
+    # ========================================================
+    # Allowed Channel
+    # ========================================================
 
     if message.channel.id not in ALLOWED_CHANNELS:
 
@@ -465,18 +544,8 @@ async def on_message(message):
             "⏭️ Ignored: channel is not allowed"
         )
 
-        print(
-            f"Allowed channels: {ALLOWED_CHANNELS}"
-        )
-
-        print("=" * 60)
-
         return
 
-
-    # --------------------------------------------------------
-    # Target channel matched
-    # --------------------------------------------------------
 
     print(
         "✅ TARGET CHANNEL MATCHED"
@@ -500,8 +569,6 @@ async def on_message(message):
                 message.content
             )
 
-            # Escape normal Discord text because it is
-            # not intentionally formatted as Telegram HTML.
             text = html.escape(text)
 
             if driver:
@@ -511,16 +578,8 @@ async def on_message(message):
                     f"{text}"
                 )
 
-            print(
-                "➡️ Sending text to Telegram..."
-            )
-
             await send_message(
                 text
-            )
-
-            print(
-                "✅ Text sent to Telegram"
             )
 
 
@@ -538,7 +597,7 @@ async def on_message(message):
             if text:
 
                 print(
-                    "➡️ Sending embed text to Telegram..."
+                    "➡️ Sending formatted job to Telegram..."
                 )
 
                 await send_message(
@@ -546,7 +605,7 @@ async def on_message(message):
                 )
 
                 print(
-                    "✅ Embed text sent"
+                    "✅ Formatted job sent"
                 )
 
 
@@ -559,17 +618,9 @@ async def on_message(message):
                 and embed.image.url
             ):
 
-                print(
-                    "➡️ Sending embed image..."
-                )
-
                 await send_photo(
                     embed.image.url,
                     driver
-                )
-
-                print(
-                    "✅ Embed image sent"
                 )
 
 
@@ -582,17 +633,9 @@ async def on_message(message):
                 and embed.thumbnail.url
             ):
 
-                print(
-                    "➡️ Sending embed thumbnail..."
-                )
-
                 await send_photo(
                     embed.thumbnail.url,
                     driver
-                )
-
-                print(
-                    "✅ Embed thumbnail sent"
                 )
 
 
@@ -615,33 +658,16 @@ async def on_message(message):
 
             if ctype.startswith("image"):
 
-                print(
-                    "➡️ Sending image to Telegram..."
-                )
-
                 await send_photo(
                     attachment.url,
                     attachment.filename
                 )
 
-                print(
-                    "✅ Image sent"
-                )
-
-
             else:
-
-                print(
-                    "➡️ Sending document to Telegram..."
-                )
 
                 await send_document(
                     attachment.url,
                     attachment.filename
-                )
-
-                print(
-                    "✅ Document sent"
                 )
 
 
@@ -736,9 +762,9 @@ if __name__ == "__main__":
     print("=" * 60)
 
 
-    # --------------------------------------------------------
-    # Start Flask in background thread
-    # --------------------------------------------------------
+    # ========================================================
+    # Start Flask
+    # ========================================================
 
     web_thread = threading.Thread(
         target=run_web_server,
@@ -748,10 +774,35 @@ if __name__ == "__main__":
     web_thread.start()
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # Start Discord Bot
-    # --------------------------------------------------------
+    # ========================================================
 
     client.run(
         DISCORD_TOKEN
     )
+```
+
+با Embed مشابه پیام اول، خروجی باید به این فرم نزدیک شود:
+
+```text
+👤 yoosef
+
+📌 Job delivery #67719722
+🎗 [Real] - 41 km
+🟢 From: 🇺🇸 Bakersfield
+🔴 To: 🇺🇸 Bakersfield
+📦 Details: Cargo: Product Samples
+Accepted distance: 41 km
+Profit: 254 $
+Truck: Ford F150_23
+Statistics: Real
+Rank within company: 1st
+
+--------------------
+TrucksBook
+```
+
+و اگر Footer خود Discord شامل `⚡️@Caspiancboy⚡️` باشد، همان را نگه می‌دارد.
+
+**یک نکته مهم:** در نمونه‌ای که دادی `From`، `To` و `Details` را دیگر به‌صورت خطوط جداگانه نمی‌خواهیم؛ منطق جدید دقیقاً این سه Field را شناسایی و به قالب تک‌خطی تبدیل می‌کند. در کد قبلی این Fieldها به‌صورت جداگانه `<b>نام فیلد</b>` و سپس مقدارشان ارسال می‌شد، که دلیل اصلی تفاوت خروجی بود.
