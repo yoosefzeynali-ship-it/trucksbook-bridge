@@ -335,3 +335,8 @@ async def on_message(message):
         print(type(e).__name__)
         print(e)
         print("=" * 60)
+# ==========================
+# Start Bot
+# ==========================
+
+client.run(DISCORD_TOKEN)
