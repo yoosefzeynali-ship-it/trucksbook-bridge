@@ -17,6 +17,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+
 if not DISCORD_TOKEN:
     raise RuntimeError("DISCORD_TOKEN not found")
 
@@ -35,6 +36,7 @@ ALLOWED_CHANNELS = {
     1119726229621321819,
     1087132698096705726
 }
+
 
 # ============================================================
 # Discord Client
@@ -96,7 +98,21 @@ async def send_message(text):
     if not text:
         return
 
-    text = html.escape(text)
+    # IMPORTANT:
+    # Do NOT html.escape the complete message here.
+    #
+    # embed_to_text() intentionally creates Telegram HTML
+    # tags such as <b>...</b>.
+    #
+    # Escaping the whole message would turn:
+    #
+    # <b>From</b>
+    #
+    # into:
+    #
+    # &lt;b&gt;From&lt;/b&gt;
+    #
+    # and Telegram would display the tags as normal text.
 
     await telegram(
         "sendMessage",
@@ -121,7 +137,6 @@ async def send_photo(url, caption=None):
     }
 
     if caption:
-
         data["caption"] = html.escape(caption)
         data["parse_mode"] = "HTML"
 
@@ -143,7 +158,6 @@ async def send_document(url, caption=None):
     }
 
     if caption:
-
         data["caption"] = html.escape(caption)
         data["parse_mode"] = "HTML"
 
@@ -202,34 +216,57 @@ def convert_emoji(text):
 
 
 # ============================================================
-# Discord Embed → Text
+# Discord Embed → Telegram HTML Text
 # ============================================================
 
 def embed_to_text(embed: discord.Embed, driver=None):
 
     lines = []
 
+    # --------------------------------------------------------
+    # Driver
+    # --------------------------------------------------------
+
     if driver:
 
         lines.append(
-            f"👤 {driver}"
+            f"👤 {html.escape(driver)}"
         )
 
         lines.append("")
 
+
+    # --------------------------------------------------------
+    # Embed Title
+    # --------------------------------------------------------
+
     if embed.title:
 
+        title = convert_emoji(embed.title)
+
         lines.append(
-            f"📦 {convert_emoji(embed.title)}"
+            f"📦 {html.escape(title)}"
         )
+
+
+    # --------------------------------------------------------
+    # Embed Description
+    # --------------------------------------------------------
 
     if embed.description:
 
-        lines.append(
-            convert_emoji(
-                embed.description
-            )
+        description = convert_emoji(
+            embed.description
         )
+
+        lines.append(
+            html.escape(description)
+        )
+
+
+    # --------------------------------------------------------
+    # Embed Fields
+    # --------------------------------------------------------
 
     if embed.fields:
 
@@ -248,12 +285,24 @@ def embed_to_text(embed: discord.Embed, driver=None):
             if not value:
                 continue
 
+            # Escape ONLY the actual text.
+            # The <b> tags themselves remain valid Telegram HTML.
+
+            name = html.escape(name)
+            value = html.escape(value)
+
             lines.append(
                 f"<b>{name}</b>"
             )
 
             lines.append(value)
+
             lines.append("")
+
+
+    # --------------------------------------------------------
+    # Footer
+    # --------------------------------------------------------
 
     if embed.footer and embed.footer.text:
 
@@ -261,11 +310,14 @@ def embed_to_text(embed: discord.Embed, driver=None):
             "--------------------"
         )
 
-        lines.append(
-            convert_emoji(
-                embed.footer.text
-            )
+        footer = convert_emoji(
+            embed.footer.text
         )
+
+        lines.append(
+            html.escape(footer)
+        )
+
 
     return "\n".join(lines).strip()
 
@@ -282,6 +334,7 @@ def get_driver_name(message):
 
             return embed.author.name
 
+
     if message.author and message.author.name:
 
         name = message.author.name
@@ -289,6 +342,7 @@ def get_driver_name(message):
         if "webhook" not in name.lower():
 
             return name
+
 
     return None
 
@@ -341,9 +395,7 @@ async def on_ready():
 async def on_message(message):
 
     # --------------------------------------------------------
-    # IMPORTANT:
-    # This print happens BEFORE any filtering.
-    # It tells us whether Discord delivered the event.
+    # Debug information
     # --------------------------------------------------------
 
     print()
@@ -448,10 +500,14 @@ async def on_message(message):
                 message.content
             )
 
+            # Escape normal Discord text because it is
+            # not intentionally formatted as Telegram HTML.
+            text = html.escape(text)
+
             if driver:
 
                 text = (
-                    f"👤 {driver}\n\n"
+                    f"👤 {html.escape(driver)}\n\n"
                     f"{text}"
                 )
 
@@ -494,6 +550,10 @@ async def on_message(message):
                 )
 
 
+            # ------------------------------------------------
+            # Embed Image
+            # ------------------------------------------------
+
             if (
                 embed.image
                 and embed.image.url
@@ -512,6 +572,10 @@ async def on_message(message):
                     "✅ Embed image sent"
                 )
 
+
+            # ------------------------------------------------
+            # Embed Thumbnail
+            # ------------------------------------------------
 
             elif (
                 embed.thumbnail
@@ -548,6 +612,7 @@ async def on_message(message):
                 f"{attachment.filename}"
             )
 
+
             if ctype.startswith("image"):
 
                 print(
@@ -562,6 +627,7 @@ async def on_message(message):
                 print(
                     "✅ Image sent"
                 )
+
 
             else:
 
@@ -582,6 +648,7 @@ async def on_message(message):
         print(
             "✅ MESSAGE PROCESSING COMPLETED"
         )
+
 
     except Exception as e:
 
