@@ -71,14 +71,17 @@ async def get_session():
 # ============================================================
 
 async def telegram(method: str, data: dict):
+
     s = await get_session()
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{method}"
 
     async with s.post(url, data=data) as resp:
+
         result = await resp.text()
 
         if resp.status != 200:
+
             print("=" * 60)
             print("❌ TELEGRAM ERROR")
             print("Status:", resp.status)
@@ -93,10 +96,14 @@ async def telegram(method: str, data: dict):
 # ============================================================
 
 def escape_html(text):
+
     if text is None:
         return ""
 
-    return html.escape(str(text), quote=False)
+    return html.escape(
+        str(text),
+        quote=False
+    )
 
 
 # ============================================================
@@ -104,6 +111,7 @@ def escape_html(text):
 # ============================================================
 
 async def send_message(text):
+
     if not text:
         return
 
@@ -119,37 +127,22 @@ async def send_message(text):
 
 
 # ============================================================
-# Send Telegram Photo
-# ============================================================
-
-async def send_photo(url, caption=None):
-    data = {
-        "chat_id": CHAT_ID,
-        "photo": url
-    }
-
-    if caption:
-        data["caption"] = escape_html(caption)
-        data["parse_mode"] = "HTML"
-
-    await telegram(
-        "sendPhoto",
-        data
-    )
-
-
-# ============================================================
 # Send Telegram Document
 # ============================================================
 
 async def send_document(url, caption=None):
+
     data = {
         "chat_id": CHAT_ID,
         "document": url
     }
 
     if caption:
-        data["caption"] = escape_html(caption)
+
+        data["caption"] = escape_html(
+            caption
+        )
+
         data["parse_mode"] = "HTML"
 
     await telegram(
@@ -163,6 +156,7 @@ async def send_document(url, caption=None):
 # ============================================================
 
 EMOJI_MAP = {
+
     ":flag_ir:": "🇮🇷",
     ":flag_us:": "🇺🇸",
     ":flag_gb:": "🇬🇧",
@@ -195,12 +189,13 @@ emoji_pattern = re.compile(
 
 
 def convert_emoji(text):
+
     if not text:
         return ""
 
     return emoji_pattern.sub(
         lambda m: EMOJI_MAP[m.group(0)],
-        str(text)
+        text
     )
 
 
@@ -209,67 +204,76 @@ def convert_emoji(text):
 # ============================================================
 
 def clean_text(text):
+
     if not text:
         return ""
 
     text = convert_emoji(text)
 
-    # Normalize Windows line endings
-    text = text.replace("\r\n", "\n")
-    text = text.replace("\r", "\n")
+    text = text.replace(
+        "\r\n",
+        "\n"
+    )
 
-    # Remove trailing spaces from every line
+    text = text.replace(
+        "\r",
+        "\n"
+    )
+
     text = "\n".join(
         line.rstrip()
         for line in text.split("\n")
     )
 
-    # Remove excessive spaces inside a line
-    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(
+        r"[ \t]+",
+        " ",
+        text
+    )
 
-    # Remove excessive blank lines
-    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(
+        r"\n{3,}",
+        "\n\n",
+        text
+    )
 
     return text.strip()
 
 
 # ============================================================
-# Format Details
+# Format Job Details
 # ============================================================
 
 def format_details(value):
+
     value = clean_text(value)
 
     if not value:
         return []
 
-    raw_lines = value.splitlines()
-
-    lines = []
-
-    for line in raw_lines:
-        line = line.strip()
-
-        if not line:
-            continue
-
-        lines.append(line)
+    lines = [
+        line.strip()
+        for line in value.splitlines()
+        if line.strip()
+    ]
 
     if not lines:
         return []
 
     result = []
 
-    first_line = lines[0]
+    # First line
+    # Example:
+    # 📦 Details: Cargo: Mobile Stacker
 
-    # First line of Details:
-    # 📦 Details: Cargo: ...
     result.append(
-        f"📦 Details: {escape_html(first_line)}"
+        f"📦 Details: {escape_html(lines[0])}"
     )
 
-    # Remaining lines stay exactly in the same order.
+    # Remaining lines
+
     for line in lines[1:]:
+
         result.append(
             escape_html(line)
         )
@@ -285,14 +289,17 @@ def embed_to_text(embed: discord.Embed, driver=None):
 
     lines = []
 
+
     # ========================================================
     # Driver
     # ========================================================
 
     if driver:
+
         lines.append(
             f"👤 {escape_html(driver)}"
         )
+
         lines.append("")
 
 
@@ -301,9 +308,13 @@ def embed_to_text(embed: discord.Embed, driver=None):
     # ========================================================
 
     if embed.title:
-        title = clean_text(embed.title)
+
+        title = clean_text(
+            embed.title
+        )
 
         if title:
+
             lines.append(
                 f"📌 {escape_html(title)}"
             )
@@ -314,9 +325,13 @@ def embed_to_text(embed: discord.Embed, driver=None):
     # ========================================================
 
     if embed.description:
-        description = clean_text(embed.description)
+
+        description = clean_text(
+            embed.description
+        )
 
         if description:
+
             lines.append(
                 f"🎗 {escape_html(description)}"
             )
@@ -370,9 +385,13 @@ def embed_to_text(embed: discord.Embed, driver=None):
 
         elif field_name == "details":
 
-            details = format_details(value)
+            details = format_details(
+                value
+            )
 
-            lines.extend(details)
+            lines.extend(
+                details
+            )
 
 
         # ====================================================
@@ -381,8 +400,13 @@ def embed_to_text(embed: discord.Embed, driver=None):
 
         else:
 
-            escaped_name = escape_html(name)
-            escaped_value = escape_html(value)
+            escaped_name = escape_html(
+                name
+            )
+
+            escaped_value = escape_html(
+                value
+            )
 
             lines.append(
                 f"{escaped_name}: {escaped_value}"
@@ -396,24 +420,34 @@ def embed_to_text(embed: discord.Embed, driver=None):
     footer_text = ""
 
     if embed.footer and embed.footer.text:
+
         footer_text = clean_text(
             embed.footer.text
         )
 
     if footer_text:
+
         lines.append("")
+
         lines.append(
-            escape_html(footer_text)
+            escape_html(
+                footer_text
+            )
         )
+
 
     # ========================================================
     # Group Tag
     # ========================================================
 
     if GROUP_TAG:
+
         lines.append("")
+
         lines.append(
-            escape_html(GROUP_TAG)
+            escape_html(
+                GROUP_TAG
+            )
         )
 
 
@@ -421,7 +455,9 @@ def embed_to_text(embed: discord.Embed, driver=None):
     # Final Cleanup
     # ========================================================
 
-    return "\n".join(lines).strip()
+    return "\n".join(
+        lines
+    ).strip()
 
 
 # ============================================================
@@ -432,15 +468,23 @@ def get_driver_name(message):
 
     for embed in message.embeds:
 
-        if embed.author and embed.author.name:
+        if (
+            embed.author
+            and embed.author.name
+        ):
+
             return embed.author.name
 
 
-    if message.author and message.author.name:
+    if (
+        message.author
+        and message.author.name
+    ):
 
         name = message.author.name
 
         if "webhook" not in name.lower():
+
             return name
 
 
@@ -539,10 +583,13 @@ async def on_message(message):
 
 
     # ========================================================
-    # Ignore Own Messages
+    # Ignore own messages
     # ========================================================
 
-    if client.user and message.author.id == client.user.id:
+    if (
+        client.user
+        and message.author.id == client.user.id
+    ):
 
         print(
             "⏭️ Ignored: message sent by this bot"
@@ -586,7 +633,9 @@ async def on_message(message):
                 message.content
             )
 
-            text = escape_html(text)
+            text = escape_html(
+                text
+            )
 
             if driver:
 
@@ -632,34 +681,11 @@ async def on_message(message):
                 )
 
 
-            # ================================================
-            # Embed Image
-            # ================================================
-
-            if (
-                embed.image
-                and embed.image.url
-            ):
-
-                await send_photo(
-                    embed.image.url,
-                    driver
-                )
-
-
-            # ================================================
-            # Embed Thumbnail
-            # ================================================
-
-            elif (
-                embed.thumbnail
-                and embed.thumbnail.url
-            ):
-
-                await send_photo(
-                    embed.thumbnail.url,
-                    driver
-                )
+            # =================================================
+            # IMPORTANT:
+            # Embed images and thumbnails are intentionally
+            # NOT sent to Telegram.
+            # =================================================
 
 
         # ====================================================
@@ -679,19 +705,22 @@ async def on_message(message):
             )
 
 
+            # Images are ignored.
+            # Other files are still sent as documents.
+
             if ctype.startswith("image"):
 
-                await send_photo(
-                    attachment.url,
-                    attachment.filename
+                print(
+                    "⏭️ Ignored image attachment"
                 )
 
-            else:
+                continue
 
-                await send_document(
-                    attachment.url,
-                    attachment.filename
-                )
+
+            await send_document(
+                attachment.url,
+                attachment.filename
+            )
 
 
         print(
